@@ -1,0 +1,85 @@
+---
+- hosts: swarm
+  remote_user: root
+
+  tasks:
+  - name: print facts
+    debug:
+      var: ansible_facts
+
+  - name: debug users variable
+    debug:
+      var: users
+
+  - name: ensure existence of wheel group
+    group:
+      name: wheel
+      state: present
+
+  - name: Allow 'wheel' group to have passwordless sudo
+    lineinfile:
+      path: /etc/sudoers
+      state: present
+      regexp: '^%wheel'
+      line: '%wheel ALL=(ALL) NOPASSWD: ALL'
+      validate: '/usr/sbin/visudo -cf %s'
+
+  - name: Add users with wheel group to nodes
+    user:
+      name: "{{ item.name }}"
+      state: present
+      groups: wheel
+      append: true
+      create_home: true
+      shell: /bin/bash
+    with_items: "{{ users }}"
+
+  - name: Set authorized key for remote users
+    authorized_key:
+      user: "{{ item.name }}"
+      state: present
+      key: "{{ item.public_key }}"
+    with_items: "{{ users }}"
+
+  - name: Install packages
+    yum:
+      name:
+      - yum-utils
+      - epel-release
+      - device-mapper-persistent-data
+      - vim
+      - tree
+      - nmap
+      state: present
+
+    vars:
+      pip_install_packages:
+        - docker
+        - docker-compose
+
+  - name: install pip
+    import_role:
+        name: geerlingguy.pip
+
+  # - name: add docker repo
+  #   get_url:
+  #     url: https://download.docker.com/linux/centos/docker-ce.repo
+  #     dest: /etc/yum.repos.d/docer-ce.repo
+
+  # - name: install docker
+  #   package:
+  #     name: docker-ce
+  #     state: latest
+
+  # - name: Ensure docker service is started
+  #   service:
+  #     name: docker
+  #     state: started
+  #     enabled: yes
+
+  - name: Ensure users are added to the docker group
+    user:
+      name: "{{ item.name }}"
+      groups: docker
+      append: true
+    with_items: "{{ users }}"

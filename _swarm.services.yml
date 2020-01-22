@@ -1,0 +1,40 @@
+---
+- hosts: swarm-managers
+  remote_user: root
+
+  tasks:
+  - name: deploy docker core services to swarm
+    block:
+      - name: create traefik overlay network
+        docker_network:
+          name: traefik-public
+          state: present
+          driver: overlay
+
+      - name: deploy traefik reverse-proxy service
+        docker_swarm_service:
+            image: traefik:v2.0
+            state: present
+            name: traefik
+            restart_policy: any
+            networks: traefik-public
+            publish:
+              - published_port: 80
+                target_port: 80
+              - published_port: 8080
+                target_port: 8080
+            args:
+              - --api.insecure=true
+              - --providers.docker=true
+              - --providers.docker.exposedbydefault=false
+              - --entrypoints.web.address=:80
+            limits:
+              memory: 128M
+            reservations:
+              memory: 64M
+            mounts:
+              - source: /var/run/docker.sock
+                target: /var/run/docker.sock
+                type: bind
+                readonly: true
+    run_once: yes
