@@ -61,22 +61,6 @@
     import_role:
         name: geerlingguy.pip
 
-  # - name: add docker repo
-  #   get_url:
-  #     url: https://download.docker.com/linux/centos/docker-ce.repo
-  #     dest: /etc/yum.repos.d/docer-ce.repo
-
-  # - name: install docker
-  #   package:
-  #     name: docker-ce
-  #     state: latest
-
-  # - name: Ensure docker service is started
-  #   service:
-  #     name: docker
-  #     state: started
-  #     enabled: yes
-
   - name: Ensure users are added to the docker group
     user:
       name: "{{ item.name }}"
