@@ -5,36 +5,69 @@
   tasks:
   - name: deploy docker core services to swarm
     block:
-      - name: create traefik overlay network
+      - name: create traefik overlay networks
         docker_network:
-          name: traefik-public
+          name: "{{ item }}"
           state: present
           driver: overlay
+        loop:
+          - traefik-public
+          - traefik-mgnt
+
+      - name: deploy docker socket proxy service
+        docker_swarm_service:
+          image: alpine/socat
+          state: present
+          name: socat
+          restart_config:
+            condition: any
+          networks: traefik-mgnt
+          command: "socat tcp-listen:2375,fork,reuseaddr unix-connect:/var/run/docker.sock"
+          limits:
+            memory: 64M
+          reservations:
+            memory: 32M
+          mounts:
+            - source: /var/run/docker.sock
+              target: /var/run/docker.sock
+              type: bind
+          placement:
+            constraints:
+              - node.role == manager
 
       - name: deploy traefik reverse-proxy service
         docker_swarm_service:
-            image: traefik:v2.0
-            state: present
-            name: traefik
-            restart_policy: any
-            networks: traefik-public
-            publish:
-              - published_port: 80
-                target_port: 80
-              - published_port: 8080
-                target_port: 8080
-            args:
-              - --api.insecure=true
-              - --providers.docker=true
-              - --providers.docker.exposedbydefault=false
-              - --entrypoints.web.address=:80
-            limits:
-              memory: 128M
-            reservations:
-              memory: 64M
-            mounts:
-              - source: /var/run/docker.sock
-                target: /var/run/docker.sock
-                type: bind
-                readonly: true
+          image: traefik:v2.1
+          state: present
+          name: traefik
+          restart_config:
+            condition: any
+          networks: 
+            - traefik-public
+            - traefik-mgnt
+          mode: global
+          publish:
+            - published_port: 80
+              target_port: 80
+          args:
+            - --api
+            - --api.dashboard
+            - --providers.docker
+            - --providers.docker.swarmmode
+            - --providers.docker.network=traefik-public
+            - --providers.docker.endpoint=tcp://socat:2375
+            - --providers.docker.exposedbydefault=false
+            - --entrypoints.web.address=:80
+          limits:
+            memory: 256M
+          reservations:
+            memory: 128M
+          labels:
+            traefik.enable: "true"
+            traefik.http.routers.api.entrypoints: "web"
+            traefik.http.routers.api.rule: "Host(\"traefik.brunopma.com\")"
+            traefik.http.routers.api.service: "api@internal"
+            traefik.http.routers.api.middlewares: "auth"
+            traefik.http.middlewares.auth.basicauth.users: "admin:$apr1$OQBhOGPp$RklKNZteXfX/icPanc7r7/"
+            traefik.http.services.dummy-svc.loadbalancer.server.port: "9999"
     run_once: yes
