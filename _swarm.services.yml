@@ -58,6 +58,7 @@
           args:
             - --api
             - --api.dashboard
+            - --accesslog
             - --providers.docker
             - --providers.docker.swarmmode
             - --providers.docker.network=traefik-public
@@ -87,6 +88,39 @@
             traefik.http.routers.http-catchall.entrypoints: "web"
             traefik.http.routers.http-catchall.middlewares: "redirect-to-https@docker"
             traefik.http.middlewares.redirect-to-https.redirectscheme.scheme: "https"
+
+      - name: deploy brunopma homepage
+        docker_swarm_service:
+          image: nginx:stable-alpine
+          state: present
+          name: brunopma-home
+          restart_config:
+            condition: on-failure
+          networks: 
+            - traefik-public
+          mode: replicated
+          replicas: 1
+          placement:
+            constraints:
+              - node.role == manager
+          limits:
+            memory: 16M
+          reservations:
+            memory: 4M
+          mounts:
+            - source: /var/swarm/brunopma-home
+              target: /usr/share/nginx/html
+              type: bind
+            - source: /var/swarm/nginx.conf
+              target: /etc/nginx.conf
+              type: bind
+              readonly: true
+          labels:
+            traefik.enable: "true"
+            traefik.http.routers.brunopma-home.entrypoints: "websecure"
+            traefik.http.routers.brunopma-home.rule: "Host(\"brunopma.com\")"
+            traefik.http.routers.brunopma-home.tls.certresolver: "le"
+            traefik.http.services.brunopma-home.loadbalancer.server.port: "80"
 
       - name: deploy whoami - a test service
         docker_swarm_service:
