@@ -1,3 +1,7 @@
+[gluster]
+gluster-1.brunopma.com
+gluster-2.brunopma.com
+
 [swarm-managers]
 node-1.brunopma.com
 
